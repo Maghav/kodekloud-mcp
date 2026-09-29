@@ -113,7 +113,7 @@ class Settings(BaseModel):
         description="Logging level (DEBUG, INFO, WARNING, ERROR).",
     )
     user_agent: str = Field(
-        default="kodekloud-mcp/0.1.0 (+https://github.com/kodekloud-community/kodekloud-mcp; educational/personal use)",
+        default="kodekloud-mcp/0.1.0 (+https://github.com/Maghav/kodekloud-mcp; educational/personal use)",
         description="Honest User-Agent identifying the client.",
     )
 

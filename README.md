@@ -1,6 +1,6 @@
 # kodekloud-mcp
 
-[![CI](https://github.com/kodekloud-community/kodekloud-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/kodekloud-community/kodekloud-mcp/actions/workflows/ci.yml)
+[![CI](https://github.com/Maghav/kodekloud-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/Maghav/kodekloud-mcp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![MCP Standard](https://img.shields.io/badge/MCP-2024--11--05-green.svg)](https://modelcontextprotocol.io/)
@@ -198,7 +198,7 @@ uvx kodekloud-mcp
 
 ```bash
 # Install package from repository
-pip install git+https://github.com/kodekloud-community/kodekloud-mcp.git
+pip install git+https://github.com/Maghav/kodekloud-mcp.git
 
 # Verify installation
 kodekloud-mcp --help

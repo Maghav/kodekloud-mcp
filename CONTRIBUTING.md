@@ -8,7 +8,7 @@ We recommend using [`uv`](https://docs.astral.sh/uv/) for fast, reliable virtual
 
 ```bash
 # Clone the repository
-git clone https://github.com/kodekloud-community/kodekloud-mcp.git
+git clone https://github.com/Maghav/kodekloud-mcp.git
 cd kodekloud-mcp
 
 # Create a virtual environment and install development dependencies

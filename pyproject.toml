@@ -56,10 +56,10 @@ dev = [
 kodekloud-mcp = "kodekloud_mcp.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/kodekloud-community/kodekloud-mcp"
-Documentation = "https://github.com/kodekloud-community/kodekloud-mcp#readme"
-Issues = "https://github.com/kodekloud-community/kodekloud-mcp/issues"
-Repository = "https://github.com/kodekloud-community/kodekloud-mcp"
+Homepage = "https://github.com/Maghav/kodekloud-mcp"
+Documentation = "https://github.com/Maghav/kodekloud-mcp#readme"
+Issues = "https://github.com/Maghav/kodekloud-mcp/issues"
+Repository = "https://github.com/Maghav/kodekloud-mcp"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/kodekloud_mcp"]
