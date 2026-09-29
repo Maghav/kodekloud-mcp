@@ -295,3 +295,109 @@ class LabActionResponse(BaseResponseModel):
     remaining_time_minutes: int | None = Field(
         default=None, description="Initial lease time in minutes."
     )
+
+
+# =============================================================================
+# KodeKloud Engineer (KKE / Project Nautilus) Models
+# =============================================================================
+class EngineerServerTarget(BaseResponseModel):
+    """Server/host information for an assigned KodeKloud Engineer ticket."""
+
+    hostname: str = Field(description="Target host name (e.g., 'stapp01', 'jump_host', 'stdb01').")
+    ip: str | None = Field(default=None, description="Internal IP address of the target host.")
+    user: str | None = Field(
+        default=None, description="Default SSH/sudo username (e.g. 'steve', 'tony')."
+    )
+    role: str | None = Field(
+        default=None, description="Server role description (e.g. 'App Server 1')."
+    )
+
+
+class EngineerTask(BaseResponseModel):
+    """An assigned real-world SysAdmin/DevOps scenario ticket."""
+
+    task_id: str = Field(description="Unique identifier of the task/ticket.")
+    title: str = Field(description="Task title (e.g., 'Deploy Nginx as Reverse Proxy').")
+    track: str = Field(
+        default="DevOps",
+        description="Engineering track: 'System Administrator', 'DevOps', 'Cloud', 'Kubernetes'.",
+    )
+    description: str = Field(description="Full scenario briefing and problem description.")
+    acceptance_criteria: list[str] = Field(
+        default_factory=list,
+        description="List of verification requirements to pass the task.",
+    )
+    target_servers: list[EngineerServerTarget] = Field(
+        default_factory=list,
+        description="List of target infrastructure nodes involved in this task.",
+    )
+    status: str = Field(
+        default="In Progress",
+        description="Task lifecycle status: 'Assigned', 'In Progress', 'Success', 'Failed', 'Expired'.",
+    )
+    points: int = Field(default=0, description="XP or points awarded upon successful completion.")
+    assigned_at: str | None = Field(
+        default=None, description="ISO timestamp when task was assigned."
+    )
+    deadline: str | None = Field(
+        default=None, description="ISO timestamp of task completion deadline."
+    )
+    time_remaining_hours: float | None = Field(
+        default=None, description="Remaining hours before deadline expiration."
+    )
+
+
+class EngineerTaskResponse(BaseResponseModel):
+    """Response returned by get_engineer_task."""
+
+    has_active_task: bool = Field(description="True if an active ticket is currently assigned.")
+    task: EngineerTask | None = Field(default=None, description="Active task details if present.")
+    message: str | None = Field(
+        default=None, description="Informational message if no task is active."
+    )
+
+
+class EngineerProfileResponse(BaseResponseModel):
+    """Response returned by get_engineer_profile."""
+
+    username: str = Field(description="KodeKloud Engineer username or handle.")
+    current_level: str = Field(
+        description="Current engineering role/level (e.g. 'DevOps Engineer', 'System Administrator')."
+    )
+    total_points: int = Field(description="Total cumulative XP/points earned.")
+    global_rank: int | None = Field(default=None, description="Position on the global leaderboard.")
+    tasks_completed: int = Field(default=0, description="Total successfully validated tasks.")
+    tasks_failed: int = Field(default=0, description="Total failed or expired tasks.")
+    success_rate_percent: float = Field(
+        default=0.0, description="Success rate percentage (0.0 to 100.0)."
+    )
+    streak_days: int = Field(default=0, description="Consecutive daily task completion streak.")
+    eligible_for_promotion: bool = Field(
+        default=False, description="Whether learner meets criteria to advance to the next level."
+    )
+    next_level: str | None = Field(
+        default=None,
+        description="Next role in career progression path (e.g. 'Senior DevOps Engineer').",
+    )
+
+
+class EngineerHistoryItem(BaseResponseModel):
+    """Record of a previously completed, failed, or expired engineer task."""
+
+    task_id: str = Field(description="Identifier of the task.")
+    title: str = Field(description="Title of the completed/attempted task.")
+    track: str = Field(default="DevOps", description="Engineering track or role.")
+    status: str = Field(description="Result status: 'Success', 'Failed', or 'Expired'.")
+    points_awarded: int = Field(default=0, description="Points earned for this task.")
+    completed_at: str | None = Field(
+        default=None, description="ISO timestamp of completion/verification."
+    )
+
+
+class EngineerHistoryResponse(BaseResponseModel):
+    """Response returned by list_engineer_history."""
+
+    count: int = Field(description="Total count of historical tasks returned.")
+    tasks: list[EngineerHistoryItem] = Field(
+        default_factory=list, description="Historical task records."
+    )

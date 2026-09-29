@@ -113,6 +113,8 @@ flowchart LR
 
 ### Available Tools
 
+#### KodeKloud Learn Tools (`learn.kodekloud.com`)
+
 | Tool Name | Type | Description | Key Arguments |
 | :--- | :--- | :--- | :--- |
 | `get_course_progress` | Read | Fetch percentage completed, labs completed vs total, and last activity timestamp. | `course_name` *(optional string)* |
@@ -124,6 +126,14 @@ flowchart LR
 | `start_lab` | **Write** | Launch/provision an interactive hands-on lab environment. *(Disabled by default)* | `lab_id` *(required string)* |
 | `stop_lab` | **Write** | Terminate an active lab session and clean up resources. *(Disabled by default)* | `lab_id` *(required string)* |
 
+#### KodeKloud Engineer Tools (`engineer.kodekloud.com` / Project Nautilus)
+
+| Tool Name | Type | Description | Key Arguments |
+| :--- | :--- | :--- | :--- |
+| `get_engineer_task` | Read | Fetch active assigned ticket, scenario requirements, target servers (e.g. `stapp01`), credentials, points, and deadline. | *None* |
+| `get_engineer_profile` | Read | Retrieve current engineering role (DevOps, SysAdmin), total XP/points, global leaderboard rank, success rate, and promotion eligibility. | *None* |
+| `list_engineer_history` | Read | Inspect past completed, failed, or expired tasks, points earned, and completion timestamps. | `limit` *(default: 10)*, `status` *(optional filter)* |
+
 > [!NOTE]
 > Write tools (`start_lab`, `stop_lab`) are registered **only** when `KODEKLOUD_ENABLE_WRITE_TOOLS=true` is set. In read-only mode, they do not appear in the tool catalog.
 
@@ -131,6 +141,8 @@ flowchart LR
 
 - **`study_plan(goal: str)`**:
   Directs the LLM to inspect your current progress (`get_learning_summary`), enrolled courses (`get_course_progress`), remaining syllabus outline (`get_course_outline`), and exam readiness (`get_certifications`) to generate a customized, week-by-week study roadmap with hands-on lab milestones.
+- **`troubleshoot_engineer_task()`**:
+  Instructs the LLM to act as a **Senior DevOps Tech Lead & Mentor** for your active KodeKloud Engineer ticket. Inspects the task requirements and target servers via `get_engineer_task()` and provides step-by-step diagnostic workflows without spoiling the solution.
 
 ---
 

@@ -40,6 +40,12 @@ from kodekloud_mcp.models import (
     CourseOutlineResponse,
     CourseProgressItem,
     CourseProgressResponse,
+    EngineerHistoryItem,
+    EngineerHistoryResponse,
+    EngineerProfileResponse,
+    EngineerServerTarget,
+    EngineerTask,
+    EngineerTaskResponse,
     EnrolledCourseItem,
     EnrolledCoursesResponse,
     LabActionResponse,
@@ -81,6 +87,12 @@ ENDPOINTS: dict[str, str] = {
     "start_lab": "/labs/{lab_id}/start",
     # TODO: Verify the endpoint used to terminate/stop an interactive lab (write tool)
     "stop_lab": "/labs/{lab_id}/stop",
+    # TODO: Verify the endpoint that returns active task on KodeKloud Engineer
+    "engineer_task": "/engineer/tasks/current",
+    # TODO: Verify the endpoint that returns user profile/rank on KodeKloud Engineer
+    "engineer_profile": "/engineer/profile",
+    # TODO: Verify the endpoint that returns past tasks on KodeKloud Engineer
+    "engineer_history": "/engineer/tasks/history",
 }
 
 
@@ -138,7 +150,15 @@ class KodeKloudClient:
 
     def _sanitize_error(self, message: str) -> str:
         """Scrub any credentials from error messages."""
-        return redact_secrets(message, self.settings.session_credential)
+        secrets = [
+            s
+            for s in [
+                self.settings.session_credential,
+                self.settings.engineer_session_credential,
+            ]
+            if s
+        ]
+        return redact_secrets(message, secrets)
 
     # =========================================================================
     # HTTP Request & Resilience Logic
@@ -151,6 +171,7 @@ class KodeKloudClient:
         json_body: dict[str, Any] | None = None,
         max_retries: int = 3,
         backoff_base: float = 1.0,
+        is_engineer: bool = False,
     ) -> Any:
         """Execute an HTTP request with exponential backoff on 429 and error mapping.
 
@@ -165,20 +186,34 @@ class KodeKloudClient:
             raise RuntimeError("Internal error: _request called while in mock mode.")
 
         # Ensure credentials are present in live mode
-        if not self.settings.session_credential:
+        cred = (
+            self.settings.engineer_session_credential
+            if is_engineer and self.settings.engineer_session_credential
+            else self.settings.session_credential
+        )
+        if not cred:
             raise AuthenticationMissingError()
 
         client = await self._get_client()
         attempt = 0
 
+        # Construct request URL and appropriate headers
+        if is_engineer and not path.startswith("http://") and not path.startswith("https://"):
+            req_url = f"{self.settings.engineer_api_base_url.rstrip('/')}{path}"
+            auth_headers = self.settings.get_engineer_auth_headers()
+        else:
+            req_url = path
+            auth_headers = self.settings.get_auth_headers()
+
         while True:
             attempt += 1
             try:
-                logger.debug("Request: %s %s (attempt %d/%d)", method, path, attempt, max_retries)
-                auth_headers = self.settings.get_auth_headers()
+                logger.debug(
+                    "Request: %s %s (attempt %d/%d)", method, req_url, attempt, max_retries
+                )
                 response = await client.request(
                     method=method,
-                    url=path,
+                    url=req_url,
                     params=params,
                     json=json_body,
                     headers=auth_headers if auth_headers else None,
@@ -591,3 +626,224 @@ class KodeKloudClient:
                 status="Terminated",
                 message=f"Lab '{lab_id}' stop request completed.",
             )
+
+    # =========================================================================
+    # KodeKloud Engineer (KKE / Project Nautilus) Tools
+    # =========================================================================
+    async def get_engineer_task(self) -> EngineerTaskResponse:
+        """Retrieve current active task assigned on KodeKloud Engineer."""
+        if self.settings.use_mock:
+            return mock_data.get_mock_engineer_task()
+
+        cache_key = TTLCache.make_key("get_engineer_task")
+        cached = await self.cache.get(cache_key)
+        if isinstance(cached, EngineerTaskResponse):
+            return cached
+
+        path = ENDPOINTS["engineer_task"]
+        data = await self._request("GET", path, is_engineer=True)
+
+        result = self._parse_engineer_task(data)
+        await self.cache.set(cache_key, result)
+        return result
+
+    def _parse_engineer_task(self, data: Any) -> EngineerTaskResponse:
+        """Parse engineer active task with schema drift tolerance."""
+        try:
+            return EngineerTaskResponse.model_validate(data)
+        except ValidationError as err:
+            logger.warning(
+                "Schema drift detected in get_engineer_task: %s. Degrading gracefully.",
+                err,
+            )
+            if isinstance(data, dict):
+                # May be wrapped in {"task": ...} or top-level task object
+                raw_task = data.get("task")
+                task_dict: dict[str, Any] = raw_task if isinstance(raw_task, dict) else data
+                task_id = str(task_dict.get("id") or task_dict.get("task_id") or "")
+                if not task_id and not task_dict.get("title") and not task_dict.get("name"):
+                    return EngineerTaskResponse(
+                        has_active_task=False,
+                        task=None,
+                        message=task_dict.get("message") or "No active task currently assigned.",
+                    )
+
+                title = str(task_dict.get("title") or task_dict.get("name") or "Assigned Task")
+                desc = str(task_dict.get("description") or task_dict.get("desc") or "")
+                raw_criteria = (
+                    task_dict.get("acceptance_criteria") or task_dict.get("criteria") or []
+                )
+                criteria = (
+                    [str(c) for c in raw_criteria]
+                    if isinstance(raw_criteria, list)
+                    else [str(raw_criteria)]
+                )
+
+                raw_servers = task_dict.get("target_servers") or task_dict.get("servers") or []
+                servers: list[EngineerServerTarget] = []
+                if isinstance(raw_servers, list):
+                    for s in raw_servers:
+                        if isinstance(s, dict):
+                            servers.append(
+                                EngineerServerTarget(
+                                    hostname=str(s.get("hostname") or s.get("name") or "node"),
+                                    ip=str(s["ip"]) if s.get("ip") else None,
+                                    user=str(s.get("user") or s.get("username"))
+                                    if s.get("user") or s.get("username")
+                                    else None,
+                                    role=str(s["role"]) if s.get("role") else None,
+                                )
+                            )
+                        elif isinstance(s, str):
+                            servers.append(EngineerServerTarget(hostname=s))
+
+                raw_hours = task_dict.get("time_remaining_hours") or task_dict.get(
+                    "hours_remaining"
+                )
+                remaining_hours = float(raw_hours) if raw_hours is not None else None
+
+                task = EngineerTask(
+                    task_id=task_id or "task-unknown",
+                    title=title,
+                    track=str(task_dict.get("track") or "DevOps"),
+                    description=desc,
+                    acceptance_criteria=criteria,
+                    target_servers=servers,
+                    status=str(task_dict.get("status") or "In Progress"),
+                    points=int(task_dict.get("points") or task_dict.get("score") or 0),
+                    assigned_at=task_dict.get("assigned_at"),
+                    deadline=task_dict.get("deadline"),
+                    time_remaining_hours=remaining_hours,
+                )
+                return EngineerTaskResponse(has_active_task=True, task=task)
+
+            return EngineerTaskResponse(
+                has_active_task=False,
+                task=None,
+                message="No active task found.",
+            )
+
+    async def get_engineer_profile(self) -> EngineerProfileResponse:
+        """Retrieve user profile, track, XP, and leaderboard rank from KodeKloud Engineer."""
+        if self.settings.use_mock:
+            return mock_data.get_mock_engineer_profile()
+
+        cache_key = TTLCache.make_key("get_engineer_profile")
+        cached = await self.cache.get(cache_key)
+        if isinstance(cached, EngineerProfileResponse):
+            return cached
+
+        path = ENDPOINTS["engineer_profile"]
+        data = await self._request("GET", path, is_engineer=True)
+
+        result = self._parse_engineer_profile(data)
+        await self.cache.set(cache_key, result)
+        return result
+
+    def _parse_engineer_profile(self, data: Any) -> EngineerProfileResponse:
+        """Parse engineer profile data with schema drift tolerance."""
+        try:
+            return EngineerProfileResponse.model_validate(data)
+        except ValidationError as err:
+            logger.warning(
+                "Schema drift detected in get_engineer_profile: %s. Degrading gracefully.",
+                err,
+            )
+            if isinstance(data, dict):
+                raw_rank = data.get("global_rank") or data.get("rank")
+                rank_val = int(raw_rank) if raw_rank is not None else None
+                return EngineerProfileResponse(
+                    username=str(data.get("username") or data.get("name") or "engineer"),
+                    current_level=str(
+                        data.get("current_level")
+                        or data.get("level")
+                        or data.get("role")
+                        or "DevOps Engineer"
+                    ),
+                    total_points=int(
+                        data.get("total_points") or data.get("points") or data.get("xp") or 0
+                    ),
+                    global_rank=rank_val,
+                    tasks_completed=int(
+                        data.get("tasks_completed") or data.get("completed_tasks") or 0
+                    ),
+                    tasks_failed=int(data.get("tasks_failed") or data.get("failed_tasks") or 0),
+                    success_rate_percent=float(
+                        data.get("success_rate_percent") or data.get("success_rate") or 0.0
+                    ),
+                    streak_days=int(data.get("streak_days") or data.get("streak") or 0),
+                    eligible_for_promotion=bool(data.get("eligible_for_promotion", False)),
+                    next_level=data.get("next_level"),
+                )
+            return EngineerProfileResponse(
+                username="engineer",
+                current_level="DevOps Engineer",
+                total_points=0,
+            )
+
+    async def list_engineer_history(
+        self,
+        limit: int = 10,
+        status: str | None = None,
+    ) -> EngineerHistoryResponse:
+        """List past tasks and results on KodeKloud Engineer."""
+        if self.settings.use_mock:
+            return mock_data.get_mock_engineer_history(limit=limit, status=status)
+
+        cache_key = TTLCache.make_key("list_engineer_history", limit=limit, status=status or "")
+        cached = await self.cache.get(cache_key)
+        if isinstance(cached, EngineerHistoryResponse):
+            return cached
+
+        path = ENDPOINTS["engineer_history"]
+        params: dict[str, Any] = {"limit": limit}
+        if status:
+            params["status"] = status
+
+        data = await self._request("GET", path, params=params, is_engineer=True)
+        result = self._parse_engineer_history(data, limit=limit, status=status)
+        await self.cache.set(cache_key, result)
+        return result
+
+    def _parse_engineer_history(
+        self,
+        data: Any,
+        limit: int = 10,
+        status: str | None = None,
+    ) -> EngineerHistoryResponse:
+        """Parse engineer history with schema drift tolerance."""
+        try:
+            return EngineerHistoryResponse.model_validate(data)
+        except ValidationError as err:
+            logger.warning(
+                "Schema drift detected in list_engineer_history: %s. Degrading gracefully.",
+                err,
+            )
+            raw_items: list[Any] = []
+            if isinstance(data, list):
+                raw_items = data
+            elif isinstance(data, dict):
+                raw_items = data.get("tasks") or data.get("history") or []
+
+            items: list[EngineerHistoryItem] = []
+            for item in raw_items:
+                if isinstance(item, dict):
+                    item_status = str(item.get("status") or "Success")
+                    if status and item_status.lower() != status.lower():
+                        continue
+                    items.append(
+                        EngineerHistoryItem(
+                            task_id=str(item.get("id") or item.get("task_id") or "unknown-task"),
+                            title=str(item.get("title") or item.get("name") or "Task"),
+                            track=str(item.get("track") or "DevOps"),
+                            status=item_status,
+                            points_awarded=int(
+                                item.get("points_awarded") or item.get("points") or 0
+                            ),
+                            completed_at=item.get("completed_at") or item.get("date"),
+                        )
+                    )
+                    if len(items) >= limit:
+                        break
+
+            return EngineerHistoryResponse(count=len(items), tasks=items)

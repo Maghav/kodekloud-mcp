@@ -12,6 +12,12 @@ from kodekloud_mcp.models import (
     CourseOutlineResponse,
     CourseProgressItem,
     CourseProgressResponse,
+    EngineerHistoryItem,
+    EngineerHistoryResponse,
+    EngineerProfileResponse,
+    EngineerServerTarget,
+    EngineerTask,
+    EngineerTaskResponse,
     EnrolledCourseItem,
     EnrolledCoursesResponse,
     LabActionResponse,
@@ -613,4 +619,131 @@ def mock_stop_lab(lab_id: str) -> LabActionResponse:
         message=f"Lab '{lab_id}' has been gracefully stopped and resources cleaned up.",
         lab_url=None,
         remaining_time_minutes=0,
+    )
+
+
+# -----------------------------------------------------------------------------
+# KodeKloud Engineer (KKE / Project Nautilus) Mock Datasets
+# -----------------------------------------------------------------------------
+MOCK_ENGINEER_TASK: EngineerTask = EngineerTask(
+    task_id="kke-task-4092",
+    title="Deploy Nginx as Reverse Proxy for Application Server 1",
+    track="DevOps",
+    description=(
+        "xFusionCorp Industries is migrating their internal web architecture. "
+        "The static asset backend is already running on App Server 1 (stapp01) on port 5000. "
+        "As a DevOps Engineer, your task is to install and configure Nginx as a reverse proxy "
+        "on App Server 1 so incoming HTTP traffic on port 8096 is forwarded to localhost:5000."
+    ),
+    acceptance_criteria=[
+        "Nginx is installed on App Server 1 (stapp01)",
+        "Nginx configuration listens on port 8096",
+        "Proxy requests to http://127.0.0.1:5000 (or localhost:5000)",
+        "Nginx service is enabled and actively running (systemctl status nginx)",
+        "Test connectivity: curl -I http://127.0.0.1:8096 returns HTTP 200 OK",
+    ],
+    target_servers=[
+        EngineerServerTarget(
+            hostname="jump_host",
+            ip="172.16.238.2",
+            user="thor",
+            role="Bastion / Jump Host",
+        ),
+        EngineerServerTarget(
+            hostname="stapp01",
+            ip="172.16.238.10",
+            user="steve",
+            role="Application Server 1",
+        ),
+    ],
+    status="In Progress",
+    points=800,
+    assigned_at="2026-09-29T14:00:00Z",
+    deadline="2026-09-30T14:00:00Z",
+    time_remaining_hours=18.5,
+)
+
+MOCK_ENGINEER_PROFILE: EngineerProfileResponse = EngineerProfileResponse(
+    username="devops_ninja",
+    current_level="DevOps Engineer",
+    total_points=14250,
+    global_rank=342,
+    tasks_completed=28,
+    tasks_failed=2,
+    success_rate_percent=93.3,
+    streak_days=5,
+    eligible_for_promotion=True,
+    next_level="Senior DevOps Engineer",
+)
+
+MOCK_ENGINEER_HISTORY: list[EngineerHistoryItem] = [
+    EngineerHistoryItem(
+        task_id="kke-task-4085",
+        title="Install and Configure PostgreSQL Database",
+        track="DevOps",
+        status="Success",
+        points_awarded=1000,
+        completed_at="2026-09-28T16:20:00Z",
+    ),
+    EngineerHistoryItem(
+        task_id="kke-task-4078",
+        title="Kubernetes Pod Resource Constraints and Limits",
+        track="Kubernetes",
+        status="Success",
+        points_awarded=900,
+        completed_at="2026-09-27T11:45:00Z",
+    ),
+    EngineerHistoryItem(
+        task_id="kke-task-4071",
+        title="Linux User Setup without Home Directory",
+        track="System Administrator",
+        status="Success",
+        points_awarded=500,
+        completed_at="2026-09-26T09:15:00Z",
+    ),
+    EngineerHistoryItem(
+        task_id="kke-task-4065",
+        title="Docker Container Deployment with Persistent Volume",
+        track="DevOps",
+        status="Failed",
+        points_awarded=0,
+        completed_at="2026-09-25T19:30:00Z",
+    ),
+    EngineerHistoryItem(
+        task_id="kke-task-4059",
+        title="Configure Non-Root SSH Passwordless Access",
+        track="System Administrator",
+        status="Success",
+        points_awarded=600,
+        completed_at="2026-09-24T14:10:00Z",
+    ),
+]
+
+
+def get_mock_engineer_task() -> EngineerTaskResponse:
+    """Retrieve mock active task for KodeKloud Engineer."""
+    return EngineerTaskResponse(
+        has_active_task=True,
+        task=MOCK_ENGINEER_TASK,
+        message=None,
+    )
+
+
+def get_mock_engineer_profile() -> EngineerProfileResponse:
+    """Retrieve mock profile stats for KodeKloud Engineer."""
+    return MOCK_ENGINEER_PROFILE
+
+
+def get_mock_engineer_history(
+    limit: int = 10,
+    status: str | None = None,
+) -> EngineerHistoryResponse:
+    """Retrieve mock task history for KodeKloud Engineer."""
+    tasks = MOCK_ENGINEER_HISTORY
+    if status:
+        tasks = [t for t in tasks if t.status.lower() == status.lower()]
+    subset = tasks[:limit]
+    return EngineerHistoryResponse(
+        count=len(subset),
+        tasks=subset,
     )

@@ -18,6 +18,9 @@ async def test_tool_listing_read_only(mock_server: Any) -> None:
         "get_active_labs",
         "get_certifications",
         "get_learning_summary",
+        "get_engineer_task",
+        "get_engineer_profile",
+        "list_engineer_history",
     ]
     for expected in expected_read_tools:
         assert expected in tool_names
@@ -117,3 +120,44 @@ async def test_study_plan_prompt(mock_server: Any) -> None:
     assert "CKA in 8 weeks" in message_text
     assert "get_learning_summary()" in message_text
     assert "get_course_progress()" in message_text
+
+
+@pytest.mark.asyncio
+async def test_call_get_engineer_task(mock_server: Any) -> None:
+    """Test calling get_engineer_task via FastMCP."""
+    result = await mock_server.call_tool("get_engineer_task", {})
+    assert not result.is_error
+    content_text = result.content[0].text
+    assert "Nginx" in content_text or "stapp01" in content_text
+
+
+@pytest.mark.asyncio
+async def test_call_get_engineer_profile(mock_server: Any) -> None:
+    """Test calling get_engineer_profile via FastMCP."""
+    result = await mock_server.call_tool("get_engineer_profile", {})
+    assert not result.is_error
+    content_text = result.content[0].text
+    assert "devops_ninja" in content_text or "DevOps Engineer" in content_text
+
+
+@pytest.mark.asyncio
+async def test_call_list_engineer_history(mock_server: Any) -> None:
+    """Test calling list_engineer_history via FastMCP."""
+    result = await mock_server.call_tool("list_engineer_history", {"limit": 5})
+    assert not result.is_error
+    content_text = result.content[0].text
+    assert "PostgreSQL" in content_text or "Kubernetes" in content_text
+
+
+@pytest.mark.asyncio
+async def test_troubleshoot_engineer_task_prompt(mock_server: Any) -> None:
+    """Test invoking the troubleshoot_engineer_task prompt."""
+    prompts = await mock_server.list_prompts()
+    prompt_names = [p.name for p in prompts]
+    assert "troubleshoot_engineer_task" in prompt_names
+
+    prompt_res = await mock_server.get_prompt("troubleshoot_engineer_task", {})
+    assert prompt_res.messages
+    message_text = prompt_res.messages[0].content.text
+    assert "xFusionCorp" in message_text
+    assert "get_engineer_task()" in message_text

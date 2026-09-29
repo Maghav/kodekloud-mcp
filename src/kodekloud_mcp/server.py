@@ -22,6 +22,9 @@ from kodekloud_mcp.models import (
     CertificationsResponse,
     CourseOutlineResponse,
     CourseProgressResponse,
+    EngineerHistoryResponse,
+    EngineerProfileResponse,
+    EngineerTaskResponse,
     EnrolledCoursesResponse,
     LabActionResponse,
     LearningSummaryResponse,
@@ -55,10 +58,11 @@ def create_server(
     server = FastMCP(
         "kodekloud-mcp",
         instructions=(
-            "This MCP server connects to the user's KodeKloud learner account. "
-            "Use it to review course progress, retrieve module outlines, check active hands-on labs, "
-            "track certification milestones (e.g., CKA, CKAD, Terraform), and generate personalized "
-            "study schedules. By default, it operates in safe read-only mode."
+            "This MCP server connects to the user's KodeKloud learner account and KodeKloud "
+            "Engineer simulation platform. Use it to review course progress, retrieve module outlines, "
+            "check active hands-on labs, track certification milestones (CKA, CKAD, etc.), as well as "
+            "inspect assigned real-world SysAdmin/DevOps tasks, XP standings, and task histories on "
+            "KodeKloud Engineer. By default, it operates in safe read-only mode."
         ),
     )
 
@@ -165,6 +169,60 @@ def create_server(
         return await kk_client.get_learning_summary()
 
     # =========================================================================
+    # Tool 7: KodeKloud Engineer Task (KKE / Project Nautilus)
+    # =========================================================================
+    @server.tool()
+    async def get_engineer_task() -> EngineerTaskResponse:
+        """Fetch the current active assigned task/ticket on KodeKloud Engineer.
+
+        Retrieves the active ticket scenario (SysAdmin, DevOps, Cloud, Kubernetes),
+        including task description, acceptance criteria, target servers (e.g. stapp01, jump_host),
+        assigned credentials/usernames, points, and remaining deadline hours.
+
+        Returns:
+            EngineerTaskResponse with active task details or empty notification.
+        """
+        return await kk_client.get_engineer_task()
+
+    # =========================================================================
+    # Tool 8: KodeKloud Engineer Profile
+    # =========================================================================
+    @server.tool()
+    async def get_engineer_profile() -> EngineerProfileResponse:
+        """Retrieve user profile, career track level, XP, and rank on KodeKloud Engineer.
+
+        Returns current engineering role (e.g. 'DevOps Engineer', 'System Administrator'),
+        total points/XP, global leaderboard rank, tasks completed, tasks failed,
+        success rate, and promotion eligibility.
+
+        Returns:
+            EngineerProfileResponse with standing and career metrics.
+        """
+        return await kk_client.get_engineer_profile()
+
+    # =========================================================================
+    # Tool 9: KodeKloud Engineer Task History
+    # =========================================================================
+    @server.tool()
+    async def list_engineer_history(
+        limit: int = 10,
+        status: str | None = None,
+    ) -> EngineerHistoryResponse:
+        """List historical tasks, tickets, and results on KodeKloud Engineer.
+
+        Inspects past completed, failed, or expired tasks, tracks, points awarded,
+        and completion timestamps.
+
+        Args:
+            limit: Maximum number of historical task records to return (default: 10).
+            status: Optional filter by status: 'Success', 'Failed', or 'Expired'.
+
+        Returns:
+            EngineerHistoryResponse with historical task records.
+        """
+        return await kk_client.list_engineer_history(limit=limit, status=status)
+
+    # =========================================================================
     # Write Tools: Conditionally Registered (Disabled unless enabled)
     # =========================================================================
     if cfg.enable_write_tools:
@@ -205,7 +263,7 @@ def create_server(
         logger.info("Write tools disabled (read-only mode active).")
 
     # =========================================================================
-    # MCP Prompt: study_plan
+    # MCP Prompt 1: study_plan
     # =========================================================================
     @server.prompt()
     def study_plan(goal: str) -> str:
@@ -231,6 +289,32 @@ def create_server(
             f"   - Dedicated time for mock exams, troubleshooting drills, and review.\n"
             f"   - Tips for keeping their study streak active.\n"
             f"Present the plan in a clear, encouraging markdown table or weekly breakdown."
+        )
+
+    # =========================================================================
+    # MCP Prompt 2: troubleshoot_engineer_task
+    # =========================================================================
+    @server.prompt()
+    def troubleshoot_engineer_task() -> str:
+        """Act as a Senior DevOps Tech Lead to guide troubleshooting for an active Engineer task.
+
+        Instructs the AI assistant to inspect the current assigned KodeKloud Engineer
+        ticket via get_engineer_task and guide the learner through investigative steps
+        without giving away the complete solution directly.
+        """
+        return (
+            "You are a Senior DevOps Lead and mentor at xFusionCorp Industries guiding a junior engineer.\n"
+            "Your goal is to help them successfully solve their active KodeKloud Engineer ticket while building "
+            "deep, lasting troubleshooting skills.\n\n"
+            "Please follow these pedagogical guidelines:\n"
+            "1. Call `get_engineer_task()` to inspect the active ticket, scenario description, target servers, "
+            "and acceptance criteria.\n"
+            "2. Break down the task into logical phases: Exploration & Diagnosis -> Implementation -> Verification.\n"
+            "3. Provide targeted diagnostic commands (e.g., `systemctl status`, `journalctl -u`, `curl`, `netstat`, "
+            "`kubectl describe pod`) so the learner can inspect server state themselves.\n"
+            "4. Do NOT simply dump the final answer or configuration file; explain the rationale, configuration syntax, "
+            "and gotchas (such as firewalls, SELinux, permissions, or port bindings).\n"
+            "5. Walk through verification steps to ensure all acceptance criteria pass before they click 'Finish' or 'Confirm'."
         )
 
     return server

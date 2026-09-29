@@ -79,3 +79,32 @@ def test_masked_credential() -> None:
     assert masked.startswith("supe")
     assert masked.endswith("cdef")
     assert "..." in masked
+
+
+def test_engineer_auth_headers_fallback() -> None:
+    """Verify engineer headers fall back to primary session credential when omitted."""
+    settings = Settings(session_credential="cookie_learn_session=abc")
+    assert settings.get_engineer_auth_headers() == {"Cookie": "cookie_learn_session=abc"}
+
+
+def test_engineer_auth_headers_dedicated() -> None:
+    """Verify dedicated engineer credential overrides primary credential."""
+    settings = Settings(
+        session_credential="cookie_learn=abc",
+        engineer_session_credential="Bearer kke_jwt_xyz",
+    )
+    assert settings.get_auth_headers() == {"Cookie": "cookie_learn=abc"}
+    assert settings.get_engineer_auth_headers() == {"Authorization": "Bearer kke_jwt_xyz"}
+
+
+def test_engineer_from_env() -> None:
+    """Verify loading engineer settings from environment variables."""
+    import pytest
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv("KODEKLOUD_ENGINEER_SESSION_COOKIE", "kke_cookie=123")
+        mp.setenv("KODEKLOUD_ENGINEER_BASE_URL", "https://custom.engineer.io/api")
+        settings = Settings.from_env()
+        assert settings.engineer_session_credential == "kke_cookie=123"
+        assert settings.engineer_api_base_url == "https://custom.engineer.io/api"
+        assert settings.get_engineer_auth_headers() == {"Cookie": "kke_cookie=123"}

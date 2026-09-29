@@ -340,3 +340,121 @@ async def test_live_timeout_raises_network_timeout_error() -> None:
         await client._request("GET", "/users/me/progress", max_retries=1, backoff_base=0.01)
 
     assert "Request to KodeKloud timed out" in str(exc_info.value)
+
+
+# =============================================================================
+# KodeKloud Engineer Client Tests
+# =============================================================================
+@pytest.mark.asyncio
+async def test_mock_get_engineer_task(mock_client: KodeKloudClient) -> None:
+    """Verify get_engineer_task in mock mode returns active scenario."""
+    res = await mock_client.get_engineer_task()
+    assert res.has_active_task is True
+    assert res.task is not None
+    assert res.task.task_id == "kke-task-4092"
+    assert "Nginx" in res.task.title
+    assert len(res.task.target_servers) == 2
+    assert res.task.points == 800
+    assert res.task.time_remaining_hours is not None
+
+
+@pytest.mark.asyncio
+async def test_mock_get_engineer_profile(mock_client: KodeKloudClient) -> None:
+    """Verify get_engineer_profile in mock mode returns standing and rank."""
+    res = await mock_client.get_engineer_profile()
+    assert res.username == "devops_ninja"
+    assert res.current_level == "DevOps Engineer"
+    assert res.total_points == 14250
+    assert res.global_rank == 342
+    assert res.eligible_for_promotion is True
+    assert res.next_level == "Senior DevOps Engineer"
+
+
+@pytest.mark.asyncio
+async def test_mock_list_engineer_history(mock_client: KodeKloudClient) -> None:
+    """Verify list_engineer_history with limits and status filters."""
+    res = await mock_client.list_engineer_history(limit=3)
+    assert res.count == 3
+    assert len(res.tasks) == 3
+
+    res_filtered = await mock_client.list_engineer_history(status="Success")
+    assert res_filtered.count > 0
+    assert all(t.status == "Success" for t in res_filtered.tasks)
+
+
+@pytest.mark.asyncio
+async def test_live_engineer_task_drift_tolerance() -> None:
+    """Verify get_engineer_task handles schema drift and alternative field names."""
+    drifted_payload = {
+        "id": "kke-task-drift-1",
+        "name": "Configure Firewalld Rules",
+        "desc": "Allow port 8080 through firewall on stapp02",
+        "criteria": ["Port 8080 open", "Firewall enabled"],
+        "servers": [{"name": "stapp02", "ip": "172.16.238.11", "user": "banner"}],
+        "score": 750,
+        "hours_remaining": 12.0,
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert "/engineer/tasks/current" in str(request.url)
+        return httpx.Response(
+            status_code=200,
+            headers={"Content-Type": "application/json"},
+            json=drifted_payload,
+        )
+
+    transport = httpx.MockTransport(handler)
+    http_client = httpx.AsyncClient(transport=transport)
+
+    settings = Settings(
+        session_credential="cookie_val",
+        engineer_session_credential="Bearer token_kke",
+        use_mock=False,
+    )
+    client = KodeKloudClient(settings=settings, http_client=http_client)
+
+    res = await client.get_engineer_task()
+    assert res.has_active_task is True
+    assert res.task is not None
+    assert res.task.task_id == "kke-task-drift-1"
+    assert res.task.title == "Configure Firewalld Rules"
+    assert len(res.task.target_servers) == 1
+    assert res.task.target_servers[0].hostname == "stapp02"
+    assert res.task.points == 750
+    assert res.task.time_remaining_hours == 12.0
+
+
+@pytest.mark.asyncio
+async def test_live_engineer_profile_drift_tolerance() -> None:
+    """Verify get_engineer_profile handles schema variations."""
+    drifted_profile = {
+        "name": "cloud_guru",
+        "role": "Cloud Architect",
+        "xp": 25000,
+        "rank": 42,
+        "completed_tasks": 50,
+        "failed_tasks": 1,
+        "streak": 14,
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert "/engineer/profile" in str(request.url)
+        return httpx.Response(
+            status_code=200,
+            headers={"Content-Type": "application/json"},
+            json=drifted_profile,
+        )
+
+    transport = httpx.MockTransport(handler)
+    http_client = httpx.AsyncClient(transport=transport)
+
+    settings = Settings(session_credential="valid_token", use_mock=False)
+    client = KodeKloudClient(settings=settings, http_client=http_client)
+
+    profile = await client.get_engineer_profile()
+    assert profile.username == "cloud_guru"
+    assert profile.current_level == "Cloud Architect"
+    assert profile.total_points == 25000
+    assert profile.global_rank == 42
+    assert profile.tasks_completed == 50
+    assert profile.streak_days == 14
