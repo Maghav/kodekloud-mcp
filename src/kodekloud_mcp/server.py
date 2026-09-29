@@ -27,6 +27,7 @@ from kodekloud_mcp.models import (
     EngineerTaskResponse,
     EnrolledCoursesResponse,
     LabActionResponse,
+    LearningStreak,
     LearningSummaryResponse,
 )
 
@@ -85,7 +86,16 @@ def create_server(
         Returns:
             CourseProgressResponse with completion percentages and lab counts.
         """
-        return await kk_client.get_course_progress(course_name)
+        try:
+            return await kk_client.get_course_progress(course_name)
+        except Exception as exc:
+            logger.error("Error in get_course_progress: %s", exc)
+            return CourseProgressResponse(
+                total_courses_enrolled=0,
+                average_progress_percent=0.0,
+                courses=[],
+                error=str(exc),
+            )
 
     # =========================================================================
     # Tool 2: Enrolled Courses
@@ -100,7 +110,11 @@ def create_server(
         Returns:
             EnrolledCoursesResponse containing the list of enrolled courses.
         """
-        return await kk_client.list_enrolled_courses()
+        try:
+            return await kk_client.list_enrolled_courses()
+        except Exception as exc:
+            logger.error("Error in list_enrolled_courses: %s", exc)
+            return EnrolledCoursesResponse(count=0, courses=[], error=str(exc))
 
     # =========================================================================
     # Tool 3: Course Outline
@@ -119,7 +133,19 @@ def create_server(
         Returns:
             CourseOutlineResponse with modules, lessons, and next suggested item.
         """
-        return await kk_client.get_course_outline(course_name)
+        try:
+            return await kk_client.get_course_outline(course_name)
+        except Exception as exc:
+            logger.error("Error in get_course_outline: %s", exc)
+            return CourseOutlineResponse(
+                course_id=course_name,
+                course_title=course_name,
+                total_modules=0,
+                total_lessons=0,
+                completed_lessons=0,
+                modules=[],
+                error=str(exc),
+            )
 
     # =========================================================================
     # Tool 4: Active Labs
@@ -134,7 +160,11 @@ def create_server(
         Returns:
             ActiveLabsResponse with active lab session details.
         """
-        return await kk_client.get_active_labs()
+        try:
+            return await kk_client.get_active_labs()
+        except Exception as exc:
+            logger.error("Error in get_active_labs: %s", exc)
+            return ActiveLabsResponse(count=0, active_labs=[], error=str(exc))
 
     # =========================================================================
     # Tool 5: Certifications
@@ -150,7 +180,11 @@ def create_server(
         Returns:
             CertificationsResponse with tracked certifications and readiness.
         """
-        return await kk_client.get_certifications()
+        try:
+            return await kk_client.get_certifications()
+        except Exception as exc:
+            logger.error("Error in get_certifications: %s", exc)
+            return CertificationsResponse(count=0, certifications=[], error=str(exc))
 
     # =========================================================================
     # Tool 6: Learning Summary
@@ -166,7 +200,18 @@ def create_server(
         Returns:
             LearningSummaryResponse compact learner profile digest.
         """
-        return await kk_client.get_learning_summary()
+        try:
+            return await kk_client.get_learning_summary()
+        except Exception as exc:
+            logger.error("Error in get_learning_summary: %s", exc)
+            return LearningSummaryResponse(
+                learner_name="KodeKloud Learner",
+                total_hours_learned=0.0,
+                total_completed_labs=0,
+                streak=LearningStreak(current_streak_days=0, longest_streak_days=0),
+                recent_activities=[],
+                error=str(exc),
+            )
 
     # =========================================================================
     # Tool 7: KodeKloud Engineer Task (KKE / Project Nautilus)
@@ -182,7 +227,16 @@ def create_server(
         Returns:
             EngineerTaskResponse with active task details or empty notification.
         """
-        return await kk_client.get_engineer_task()
+        try:
+            return await kk_client.get_engineer_task()
+        except Exception as exc:
+            logger.error("Error in get_engineer_task: %s", exc)
+            return EngineerTaskResponse(
+                has_active_task=False,
+                task=None,
+                message=str(exc),
+                error=str(exc),
+            )
 
     # =========================================================================
     # Tool 8: KodeKloud Engineer Profile
@@ -198,7 +252,16 @@ def create_server(
         Returns:
             EngineerProfileResponse with standing and career metrics.
         """
-        return await kk_client.get_engineer_profile()
+        try:
+            return await kk_client.get_engineer_profile()
+        except Exception as exc:
+            logger.error("Error in get_engineer_profile: %s", exc)
+            return EngineerProfileResponse(
+                username="engineer",
+                current_level="DevOps Engineer",
+                total_points=0,
+                error=str(exc),
+            )
 
     # =========================================================================
     # Tool 9: KodeKloud Engineer Task History
@@ -220,7 +283,11 @@ def create_server(
         Returns:
             EngineerHistoryResponse with historical task records.
         """
-        return await kk_client.list_engineer_history(limit=limit, status=status)
+        try:
+            return await kk_client.list_engineer_history(limit=limit, status=status)
+        except Exception as exc:
+            logger.error("Error in list_engineer_history: %s", exc)
+            return EngineerHistoryResponse(count=0, tasks=[], error=str(exc))
 
     # =========================================================================
     # Write Tools: Conditionally Registered (Disabled unless enabled)
@@ -243,7 +310,17 @@ def create_server(
             Returns:
                 LabActionResponse confirming startup status and web terminal URL.
             """
-            return await kk_client.start_lab(lab_id)
+            try:
+                return await kk_client.start_lab(lab_id)
+            except Exception as exc:
+                logger.error("Error in start_lab: %s", exc)
+                return LabActionResponse(
+                    success=False,
+                    lab_id=lab_id,
+                    status="Failed",
+                    message=str(exc),
+                    error=str(exc),
+                )
 
         @server.tool()
         async def stop_lab(lab_id: str) -> LabActionResponse:
@@ -258,7 +335,17 @@ def create_server(
             Returns:
                 LabActionResponse confirming lab termination.
             """
-            return await kk_client.stop_lab(lab_id)
+            try:
+                return await kk_client.stop_lab(lab_id)
+            except Exception as exc:
+                logger.error("Error in stop_lab: %s", exc)
+                return LabActionResponse(
+                    success=False,
+                    lab_id=lab_id,
+                    status="Failed",
+                    message=str(exc),
+                    error=str(exc),
+                )
     else:
         logger.info("Write tools disabled (read-only mode active).")
 
@@ -318,6 +405,107 @@ def create_server(
         )
 
     return server
+
+
+def create_mcp_asgi_app(
+    server: FastMCP,
+    settings: Settings | None = None,
+):
+    """Create a unified Starlette ASGI application supporting both Streamable HTTP and SSE transports.
+
+    Endpoints:
+    - GET /: Returns server status and available transport endpoints.
+    - POST /: Routes directly to Streamable HTTP handler (for root-configured clients).
+    - GET /health: Health check endpoint.
+    - GET /sse: MCP Server-Sent Events stream (for ChatGPT and legacy SSE clients).
+    - POST /messages: SSE session message receiver.
+    - POST /mcp & GET /mcp: MCP Streamable HTTP endpoint (for Claude and Gemini).
+    """
+    from starlette.applications import Starlette
+    from starlette.middleware import Middleware
+    from starlette.middleware.cors import CORSMiddleware
+    from starlette.requests import Request
+    from starlette.responses import JSONResponse, Response
+    from starlette.routing import Route
+
+    cfg = settings or Settings.from_env()
+
+    # Configure server settings for public reverse proxy setups
+    server.settings.host = cfg.host
+    server.settings.port = cfg.port
+    if cfg.host in ("0.0.0.0", "::") or server.settings.transport_security:
+        # Behind reverse proxies (e.g. Caddy), disable localhost-only DNS rebinding restrictions
+        if server.settings.transport_security:
+            server.settings.transport_security.enable_dns_rebinding_protection = False
+            server.settings.transport_security.allowed_hosts = ["*"]
+            server.settings.transport_security.allowed_origins = ["*"]
+
+    stream_app = server.streamable_http_app()
+    sse_app = server.sse_app()
+
+    routes: list[Route] = []
+
+    # Find the Streamable HTTP ASGI endpoint handler
+    stream_asgi = None
+    for r in stream_app.routes:
+        if getattr(r, "path", None) == "/mcp":
+            stream_asgi = r.endpoint
+            break
+
+    async def root_info(request: Request) -> Response:
+        return JSONResponse({
+            "name": "kodekloud-mcp",
+            "status": "healthy",
+            "version": "0.1.0",
+            "endpoints": {
+                "streamable_http": "/mcp",
+                "sse": "/sse",
+                "messages": "/messages",
+                "health": "/health",
+            },
+            "connectors": {
+                "claude": "Use Streamable HTTP at /mcp (e.g. https://your-domain/mcp)",
+                "gemini": "Use Streamable HTTP at /mcp (e.g. https://your-domain/mcp)",
+                "chatgpt": "Use SSE at /sse (e.g. https://your-domain/sse)",
+            },
+        })
+
+    async def health_handler(request: Request) -> Response:
+        return JSONResponse({"status": "ok"})
+
+    routes.append(Route("/", endpoint=root_info, methods=["GET", "HEAD"]))
+    if stream_asgi:
+        routes.append(Route("/", endpoint=stream_asgi, methods=["POST"]))
+    routes.append(Route("/health", endpoint=health_handler, methods=["GET", "HEAD"]))
+
+    # Mount SSE routes (/sse, /messages)
+    for r in sse_app.routes:
+        routes.append(r)
+
+    # Mount Streamable HTTP routes (/mcp)
+    for r in stream_app.routes:
+        if getattr(r, "path", None) not in [getattr(existing, "path", None) for existing in routes]:
+            routes.append(r)
+
+    lifespan_ctx = None
+    if hasattr(stream_app, "router") and hasattr(stream_app.router, "lifespan_context"):
+        lifespan_ctx = stream_app.router.lifespan_context
+
+    middleware = [
+        Middleware(
+            CORSMiddleware,
+            allow_origins=["*"],
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+    ]
+
+    return Starlette(
+        debug=cfg.log_level.upper() == "DEBUG",
+        routes=routes,
+        middleware=middleware,
+        lifespan=lifespan_ctx,
+    )
 
 
 # Default server instances for MCP development tools (e.g. 'mcp dev src/kodekloud_mcp/server.py')

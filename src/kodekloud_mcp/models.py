@@ -16,6 +16,15 @@ class BaseResponseModel(BaseModel):
 
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
+    error: str | None = Field(
+        default=None,
+        description="Error message if the operation or upstream request failed.",
+    )
+    warning: str | None = Field(
+        default=None,
+        description="Diagnostic warning or configuration guidance message.",
+    )
+
 
 # =============================================================================
 # Tool 1: Course Progress

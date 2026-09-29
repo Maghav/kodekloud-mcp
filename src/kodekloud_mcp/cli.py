@@ -14,7 +14,7 @@ from collections.abc import Sequence
 
 from kodekloud_mcp import __version__
 from kodekloud_mcp.config import Settings
-from kodekloud_mcp.server import create_server
+from kodekloud_mcp.server import create_mcp_asgi_app, create_server
 
 
 def setup_logging(level_name: str) -> logging.Logger:
@@ -49,9 +49,9 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "-t",
         "--transport",
-        choices=["stdio", "sse", "streamable-http"],
+        choices=["stdio", "sse", "streamable-http", "http"],
         default=None,
-        help="Transport protocol (stdio, sse, streamable-http). Default: from KODEKLOUD_MCP_TRANSPORT or 'stdio'.",
+        help="Transport protocol (stdio, sse, streamable-http, http). Default: from KODEKLOUD_MCP_TRANSPORT or 'stdio'.",
     )
     parser.add_argument(
         "--host",
@@ -138,23 +138,28 @@ def main(argv: Sequence[str] | None = None) -> int:
         if settings.transport == "stdio":
             logger.info("Starting MCP server over stdio transport...")
             server.run(transport="stdio")
-        elif settings.transport == "sse":
+        elif settings.transport in ("sse", "streamable-http", "http"):
             logger.info(
-                "Starting MCP server over SSE transport at http://%s:%d/sse ...",
+                "Starting unified MCP server at http://%s:%d (Streamable HTTP: /mcp, SSE: /sse, Info: /) ...",
                 settings.host,
                 settings.port,
             )
-            server.run(transport="sse", host=settings.host, port=settings.port)
-        elif settings.transport == "streamable-http":
-            logger.info(
-                "Starting MCP server over Streamable HTTP transport at http://%s:%d/mcp ...",
-                settings.host,
-                settings.port,
+            app = create_mcp_asgi_app(server=server, settings=settings)
+            import anyio
+            import uvicorn
+
+            config = uvicorn.Config(
+                app,
+                host=settings.host,
+                port=settings.port,
+                log_level=settings.log_level.lower(),
             )
-            server.run(transport="streamable-http", host=settings.host, port=settings.port)
+            uv_server = uvicorn.Server(config)
+            anyio.run(uv_server.serve)
         else:
             logger.error(
-                "Unknown transport '%s'. Choose stdio, sse, or streamable-http.", settings.transport
+                "Unknown transport '%s'. Choose stdio, sse, streamable-http, or http.",
+                settings.transport,
             )
             return 1
     except KeyboardInterrupt:
