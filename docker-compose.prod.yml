@@ -1,0 +1,47 @@
+version: "3.8"
+
+services:
+  kodekloud-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: kodekloud-mcp:latest
+    container_name: kodekloud-mcp
+    restart: unless-stopped
+    environment:
+      - KODEKLOUD_SESSION_COOKIE=${KODEKLOUD_SESSION_COOKIE}
+      - KODEKLOUD_USE_MOCK=${KODEKLOUD_USE_MOCK:-false}
+      - KODEKLOUD_ENABLE_WRITE_TOOLS=${KODEKLOUD_ENABLE_WRITE_TOOLS:-false}
+      - KODEKLOUD_CACHE_TTL_SECONDS=${KODEKLOUD_CACHE_TTL_SECONDS:-60}
+      - KODEKLOUD_MCP_TRANSPORT=sse
+      - KODEKLOUD_MCP_HOST=0.0.0.0
+      - KODEKLOUD_MCP_PORT=8000
+      - KODEKLOUD_LOG_LEVEL=${KODEKLOUD_LOG_LEVEL:-INFO}
+    command: ["--transport", "sse", "--host", "0.0.0.0", "--port", "8000"]
+    # Internal exposure only; external traffic is mediated by Caddy
+    expose:
+      - "8000"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy-proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - DOMAIN=${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - kodekloud-mcp
+
+volumes:
+  caddy_data:
+  caddy_config:
