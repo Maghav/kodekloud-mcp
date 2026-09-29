@@ -430,15 +430,15 @@ def create_mcp_asgi_app(
 
     cfg = settings or Settings.from_env()
 
-    # Configure server settings for public reverse proxy setups
-    server.settings.host = cfg.host
-    server.settings.port = cfg.port
-    if cfg.host in ("0.0.0.0", "::") or server.settings.transport_security:
-        # Behind reverse proxies (e.g. Caddy), disable localhost-only DNS rebinding restrictions
-        if server.settings.transport_security:
-            server.settings.transport_security.enable_dns_rebinding_protection = False
-            server.settings.transport_security.allowed_hosts = ["*"]
-            server.settings.transport_security.allowed_origins = ["*"]
+    # Configure transport security if supported by the MCP SDK
+    ts = getattr(server.settings, "transport_security", None)
+    if ts is not None:
+        if hasattr(ts, "enable_dns_rebinding_protection"):
+            ts.enable_dns_rebinding_protection = False
+        if hasattr(ts, "allowed_hosts"):
+            ts.allowed_hosts = ["*"]
+        if hasattr(ts, "allowed_origins"):
+            ts.allowed_origins = ["*"]
 
     stream_app = server.streamable_http_app()
     sse_app = server.sse_app()
