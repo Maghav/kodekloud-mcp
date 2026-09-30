@@ -431,6 +431,18 @@ def create_mcp_asgi_app(
     cfg = settings or Settings.from_env()
 
     # Configure transport security if supported by the MCP SDK
+    sec_settings = None
+    try:
+        from mcp.server.transport_security import TransportSecuritySettings
+
+        sec_settings = TransportSecuritySettings(
+            enable_dns_rebinding_protection=False,
+            allowed_hosts=["*"],
+            allowed_origins=["*"],
+        )
+    except ImportError:
+        pass
+
     ts = getattr(server.settings, "transport_security", None)
     if ts is not None:
         if hasattr(ts, "enable_dns_rebinding_protection"):
@@ -440,8 +452,31 @@ def create_mcp_asgi_app(
         if hasattr(ts, "allowed_origins"):
             ts.allowed_origins = ["*"]
 
-    stream_app = server.streamable_http_app()
-    sse_app = server.sse_app()
+    import inspect
+
+    stream_kwargs: dict[str, object] = {}
+    sse_kwargs: dict[str, object] = {}
+
+    try:
+        sig_stream = inspect.signature(server.streamable_http_app)
+        if "transport_security" in sig_stream.parameters and sec_settings is not None:
+            stream_kwargs["transport_security"] = sec_settings
+        if "host" in sig_stream.parameters:
+            stream_kwargs["host"] = "0.0.0.0"
+    except Exception:
+        pass
+
+    try:
+        sig_sse = inspect.signature(server.sse_app)
+        if "transport_security" in sig_sse.parameters and sec_settings is not None:
+            sse_kwargs["transport_security"] = sec_settings
+        if "host" in sig_sse.parameters:
+            sse_kwargs["host"] = "0.0.0.0"
+    except Exception:
+        pass
+
+    stream_app = server.streamable_http_app(**stream_kwargs)
+    sse_app = server.sse_app(**sse_kwargs)
 
     routes: list[Route] = []
 
@@ -466,7 +501,7 @@ def create_mcp_asgi_app(
             "connectors": {
                 "claude": "Use Streamable HTTP at /mcp (e.g. https://your-domain/mcp)",
                 "gemini": "Use Streamable HTTP at /mcp (e.g. https://your-domain/mcp)",
-                "chatgpt": "Use SSE at /sse (e.g. https://your-domain/sse)",
+                "chatgpt": "Use https://your-domain/mcp or https://your-domain/sse",
             },
         })
 
@@ -475,10 +510,13 @@ def create_mcp_asgi_app(
 
     routes.append(Route("/", endpoint=root_info, methods=["GET", "HEAD"]))
     if stream_asgi:
+        # Route POST / to Streamable HTTP (for clients configured with root URL)
         routes.append(Route("/", endpoint=stream_asgi, methods=["POST"]))
+        # Route POST /sse to Streamable HTTP (for modern MCP clients like ChatGPT sending POST /sse)
+        routes.append(Route("/sse", endpoint=stream_asgi, methods=["POST"]))
     routes.append(Route("/health", endpoint=health_handler, methods=["GET", "HEAD"]))
 
-    # Mount SSE routes (/sse, /messages)
+    # Mount SSE routes (GET /sse, /messages)
     for r in sse_app.routes:
         routes.append(r)
 

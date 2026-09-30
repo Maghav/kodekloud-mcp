@@ -183,6 +183,7 @@ async def test_tool_error_graceful_handling() -> None:
 
 def test_unified_asgi_app_routes(mock_settings: Any, mock_server: Any) -> None:
     """Verify that create_mcp_asgi_app configures all required endpoints for Claude, Gemini, and ChatGPT."""
+    from starlette.testclient import TestClient
     from kodekloud_mcp.server import create_mcp_asgi_app
 
     app = create_mcp_asgi_app(mock_server, mock_settings)
@@ -193,3 +194,15 @@ def test_unified_asgi_app_routes(mock_settings: Any, mock_server: Any) -> None:
     assert "/sse" in route_paths
     assert "/mcp" in route_paths
     assert any("/messages" in p for p in route_paths)
+
+    client = TestClient(app)
+    # Test GET /
+    res_info = client.get("/")
+    assert res_info.status_code == 200
+    assert res_info.json()["status"] == "healthy"
+
+    # Test GET /health
+    res_health = client.get("/health")
+    assert res_health.status_code == 200
+    assert res_health.json()["status"] == "ok"
+
